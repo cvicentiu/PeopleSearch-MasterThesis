@@ -1,0 +1,47 @@
+\chapter{Introduction}
+\label{chapter:intro}
+
+The internet is now a major source of information. Billions of queries are performed
+each day within search engines \cite{search-stats}. Out of all these queries, between 11 and 17\%
+include a person name and 4\% contain only a person name \cite{weps3-eval}\cite{weps2-eval}.
+The results returned by search engines is comprised of millions of documents 
+that feature those particular key-words. This leads to the number of results 
+in the millions. Extracting the correct information from the documents returned 
+is a very difficult process for a human. This is particularly the case when it 
+comes to people search. There is a huge overlap in names. The ratio of identical 
+names to different people is around 1 to 10000. Detecting which person the document 
+refers to is not a trivial task, not for humans, nor for machines.
+
+The information comes from a noisy environment, the Internet. Most of the data
+is not structured the same way and there are frequent omissions or mistakes.
+This further complicates the process of extracting the correct information.
+The recent popularity of social networks lessens this problem to a certain
+extent. \cite{social-networks} The most noteworthy aspect to take into account is 
+the structured data that social network websites present. \cite{social-networks-scraping}
+Apart from the regular html template that the website posseses, which makes writing
+web scrapers easier, it also offers a reasonably strong guarantee that the labeled
+data is also correct. An example of this is the first name of the person's profile.
+It is usually present in a preset DOM node and will in almost all cases contain
+the correct spelling of the person's first name.
+
+Given the previously mentioned advantages for social networks, we have chosen
+to not focus on a general use case of disambiguating random web pages. Instead
+we have made use of the social networks reliable structure and have procured
+a dataset which features pages from the most popular social networking sites,
+such as Facebook, Twitter, Google+, but also from popular professional networks
+such as LinkedIn, GitHub, Quora, etc.
+
+The dataset represents a snapshot of a subset of profiles from the main
+social network sites, fetched in the first half of 2015. The subset contains
+approximately half a million profile pages. The structure of the dataset
+is described in more detail in \labelindexref{Section}{section:dataset-used}.
+
+The goal of the project is to correctly identify all the cliques present in the
+current dataset. In order to detect all entities within the graph, we train a
+classifier which marks which profiles (nodes) within the graph belong to the same
+entity, by identifying which profiles should be linked together. The classifier
+makes heavy use of feature vectors generated through word2vec. We also augment
+the feature set given to the classifier by computing domain specific information,
+such as the Levenshtein edit distance, euclidean distance and cosine similarity,
+as well as dataset-oriented features such as wether the entities have identical
+names or different middle names.

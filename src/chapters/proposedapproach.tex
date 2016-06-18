@@ -1,0 +1,233 @@
+\chapter{Proposed Approach}
+\label{chapter:proposed-approach}
+We have attempted to solve this problem using 2 different methods. The performance
+of each approach will be analyzed, as well the advantages and dissadvantages of
+each. The methods employed are based on ideas presented from the WEPS competition,
+but adapted to our dataset. One approach tries to solve the problem in an unsupervised
+manner, while the other aims to train a classifier using a supervised
+approach. All methods make use of the same features extracted from the dataset.
+For the unsupervised approach we generate feature vectors that identify each
+profile. With the feature vectors we perform Hierarchical Agglomerative Clustering,
+using a cosine distance as the merging factor. We vary the number of desired
+clusters and compute the precision and recall values for various thresholds.
+
+For the supervised approach, we make use of a similar approach to
+\cite{connection-analysis}. We aim to define the pairwise matching function by
+training a binary classifier that computes it:
+
+\[ f(u, v) =
+    \left\{
+        \begin{array}{ll}
+            1 \mbox{ if pages u an v refer to the same person } \\
+            0 \mbox{ otherwise }
+        \end{array}
+    \right.
+\]
+
+We have experimented with multiple classifiers however the two most noteworthy
+results come from using a Random Forest Classifier\footnote{\url{http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html}}
+and a neural net defined and trained using TensorFlow\footnote{\url{https://www.tensorflow.org/}}.
+We have also experimented with the use of other binary classifiers such as SVM's\footnote{\url{http://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html}},
+AdaBoost Classifier\footnote{\url{http://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostClassifier.html}}.
+The best results were obtained using the Neural Net. The other classifiers
+had poor performances, either due to the complexity of running on the full training set,
+or by producing poor precision/recall scores.
+
+Before going into the details of how we generate the final clustering, we shall
+explain how the dataset is structured, as well as the advantages it presents
+over the WEPS dataset.
+
+
+\section{Dataset Used}
+\label{section:dataset-used}
+Due to these noisy nature of the WEPS dataset, the approach discussed within
+this paper does not make use of the provided dataset from the competition as
+evaluation, instead it makes use of a web crawled version from various social
+networks.
+
+The list of social networks used is: Academia, CodeProject, Facebook, Github,
+Google+, Instagram, Lanyrd, Linkedin,  Mashable, Medium, Moz, Quora, Slideshare,
+Twitter, Vimeo. The information extracted from this dataset features a number of
+labeled fields from the websites. A few of these fields are: username, name
+(first and last names separated sometimes), gender, biography, interests, publications,
+jobs, etc. 
+
+The dataset also features a gold standard which describes which sets of pages
+refer to the same individual. The average number of pages per individual is
+around 2.04. The format of the dataset is a json style string list. A recursive
+approach is required to fetch all relevant content.
+
+The diagram below shows a sample entry from the dataset:
+
+
+\section{Generating Feature Vectors for Classification}
+\label{section:generating-features}
+In a previous iteration for this problem, we have attempted an unsupervised approach
+that made use of Hierarchical Agglomerative Clustering between word embeddings.
+This approach has shown that word embeddings represent a statistically relevant
+feature when it comes to clustering entities. The downside of the HAC approach is the
+performance degradation as the dataset increases. The supervised approach trains a
+classifier on a much larger corpus and thus can better learn the separating function.
+
+\subsection{Word embeddings - Word2Vec}
+\label{sub-sec:word-embeddings}
+Word embeddings represent a mapping between words in a language and a n-dimensional
+space. In order to generate these embeddings, we have made use of Google's word2vec
+approach \cite{mikolov2013distributed}. The model used is a pretrained one on
+Google News and has 300 features per vector.
+
+In order to generate a single embedding that represents a document from our dataset,
+we have computed separate embeddings for each word in the document (excluding any
+words which are not found in the word2vec's model dictionary). We then sum up
+the embeddings column by column and average out the result. The resulting vector
+is the representative embedding for our document. This process is repeated for
+both documents.
+
+To generate a feature vector for a pair case we concatenate both embeddings. A
+thing to note is that the features are not symetric and thus the resulting vector
+for pair $ (a, b) $ is different fromt he resulting vector for pair $ (b, a) $.
+To counteract this problem we generate both pairs and feed them both to the classifier.
+
+\subsection{Distance based features}
+\label{sub-sec:distance-based-features}
+
+Apart from word embeddings, the pairwise feature vector contains aggregate based
+features. These features are symetric, so only one feature is added to the feature
+vector for each pair. These features are:
+\begin{itemize}
+    \item
+      {\em Name based Levenshtein Distance. }Levenshtein Distance creates
+      a very strong discriminatory feature between documents. Since most documents
+      feature a name tag, we convert all the name characters to lowercase and then
+      compute the edit distance for the names present in both documents. Although
+      segregating documents first by grouping them by name is a valid alternative,
+      this approach allows us to consider documents that do not have the name
+      tag featured directly, or if the names differ. This can happen if the user
+      choses to use a nickname for one social network, while using his real name
+      for a second one.
+    \item
+      {\em Cosine Based Similarity and Euclidean Distance. } Although these features
+      are computed directly based on document embedding, it does
+      improve the classifiers performance. The addition to recall
+      is around a 2\% increase. Cosine similarity is defined by:
+      \[ similarity = cos(\theta) = \frac{A \cdot B}{||A|| ||B||} \]
+      Euclidean distance is defined by:
+      \[ d(p, q) = d(q, p) = \sqrt{\sum_{i=1}^{card(p)}(q_i - p_i)^2} \]
+\end{itemize}
+
+\subsection{Augmenting / Cleaning up the dataset}
+As was mentioned previously in \labelindexref{Section}{section:generating-features},
+the word2vec embeddings are not simetric. Due to this, we need to generate
+2 pairs for each unique pair of documents. This way, the training data is
+symetric and the classifier is able to learn the symetric relation between
+the features.
+
+Data within the dataset is not normalized by default. In order to normalize the
+dataset we use the following transformation for each feature vector:
+
+\[ v_{new} = \frac{v_{old} - mean(dataset)}{std(dataset)} \]
+where
+\[ mean(dataset) = \mbox{mean of each feature distribution as a vector} \]
+\[ std(dataset) = \mbox{standard deviation of each feature distribution as a vector } \]
+
+The final step for cleaning up noise within the dataset is to perform a PCA
+\footnote{\url{http://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html}}
+transformation. The data's dimensionality is reduced to 25 features and then returned
+to the original size via the inverse transformation. This has provided an
+improvement of 2\% to the recall metric.
+
+
+\section {Architecture}
+\label{section:architecture}
+
+Our approach is structured as a pipeline process. There are multiple stages, each
+applying one transformation to the data. The architecture is described in
+\labelindexref{Figure}{img:architecture}.
+The main stages are the following:
+\begin {enumerate}
+\item
+  {\em Compute word2vec embedding for document}. In this stage, each word in the
+  document's JSON representation is parsed and converted to the 300 feature space.
+  Performing an average over the features generates the document embedding.
+\item
+  {\em Compute distance wise feature}. Given either the word2vec embeddings or
+  the JSON representation of the document, the distance wise features mentioned
+  in \labelindexref{Section}{section:generating-features} are computed.
+\item
+  {\em Generate valid pairs}. Pairs of documents are generated. Pairs are
+  labeled according to the gold standard. The pair-wise generation is balanced
+  according to a real scenario, with a 100 to 1 imbalance between positive
+  and negative classes.
+\item
+  {\em Training the classifier}. Training is performed on a slightly less
+  imbalanced dataset, with only 4 to 1 imbalance between positive and negative
+  classes. However, the classifier has class weights attached in favor
+  of the positive class. Cross validation is performed using a 5 times fold.
+\end {enumerate}
+
+\fig[scale=0.5]{src/img/architecture.png}{img:architecture}{Data Processing Pipeline}
+
+\section{Testing}
+\label{section:testing}
+
+Testing our approach is done using a unbalanced generated test set. We compare
+our precision and recall scores to that of Weps best solution. The comparison
+is not completely accurate because we are working on a separate dataset, however
+there are no other similar datasets (that we could find). The results are available
+in \labelindexref{Table}{table:results}. There are 2 test sets used in the
+evaluation. The dimensions are presented in table \labelindexref{Table}{table:datasets}.
+
+\begin{center}
+\begin{table}[htb]
+  \caption{Dataset sizes used for training and testing}
+  \begin{tabular}{l*{8}{c}r}
+    \textbf {Dataset name} & \textbf{Total entries} & \textbf{Positive class count} & \textbf{Negative class count} & \textbf{Class Split} \\
+    \hline
+    Training Set   & 2500000 & 500000 & 2000000 & 1:4\\
+    Test Set 1     & 1100000 &  10000  & 1000000 & 1:10\\
+    Test Set 2     & 11000000 & 10000  & 10000000 & 1:100\\
+  \end{tabular}
+  \label{table:datasets}
+\end{table}
+\end{center}
+
+
+As is visible in the table, our approach
+keeps a recall score quite similar to the best solution that Weps has provided.
+This holds true for test sets that feature either a 1:10 imbalance of positive
+versus negative pairs, as well as for a 1:100 positive versus negative pairs.
+The precision-recall curve for the 1:100 case is plotted in
+\labelindexref{Figure}{img:precision-recall}.
+
+On the other hand, our precision scores are far superior, regardless of the test
+set imbalance. This shows that our features allow for a finer selection
+of the positive class. Nonetheless, we hold to the conservative side and only
+discover about 60\% of the positive pairs. The results are supported by the
+class distribution that we can see when performing a scatter plot on the 2
+most relevant dimensions after performing PCA. \labelindexref{Figure}{img:scatter}
+From the scatter plot we can clearly see that the classes share the same mean for
+the distributions however the standard deviation for the classes is significantly higher.
+
+We have also tested our feature vector with only the word2vec embedding. This leads to
+poor results as the embeddings do not separate entities of different names. In essence
+we are grouping people with the same interests but with different names.
+
+\begin{center}
+\begin{table}[htb]
+  \caption{Precision / recall scores}
+  \begin{tabular}{l*{8}{c}r}
+    \textbf {Model (positive:negative class ratio)} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} \\
+    \hline
+    Weps Best (-) \cite{weps3-eval} & 0.61 & 0.60 & 0.55 \\
+    \textbf{Our Unsupervised Approach (-)} & \textbf{ 0.58 } & \textbf {0.45}  & \textbf{0.51} \\
+    \textbf{Our Supervised Approach only embeddings (1:10)} & \textbf{ 0.45 } & \textbf{0.20} & \textbf{0.27} \\
+    \textbf{Our Supervised Approach (1:10)} & \textbf { 0.97 } & \textbf {0.60} & \textbf{0.74} \\
+    \textbf{Our Supervised Approach (1:100)} & \textbf{ 0.84 } & \textbf {0.60}  & \textbf{0.69} \\
+  \end{tabular}
+  \label{table:results}
+\end{table}
+\end{center}
+
+\fig[scale=0.4]{src/img/PRC.png}{img:precision-recall}{Precision-Recall curve for 1:100 test set}
+\fig[scale=0.4]{src/img/scatter01.png}{img:scatter}{Distribution of positive (red) vs negative (green) class}
+

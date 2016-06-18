@@ -1,0 +1,170 @@
+\chapter{Related Work}
+\label{chapter:project-desc}
+
+There have been a number of attempts performed in regards to web people search.
+Most relevant solutions have been proposed as part of the Web People Search competition,
+\cite{weps3-eval}\cite{weps2-eval}. The competition focuses on a more general
+problem, which is to identify web pages that describe a single individual. The
+scoring of the competition is based on the quality of the clusters generated.
+
+The dataset that WePS provides is comprised of a set of HTML web pages.
+The pages contain the first 200 \cite{weps3-eval} search results returned by a search engine, given
+a specific string query. This unfortunately leads to many web pages with
+little to no content, as well as potentially intermediate redirect pages.
+In other words the dataset is quite noisy and it is very difficult to perform
+a complete clusterization of all the inputs, simply due to a lack of data within
+the web pages.
+
+\section{Person Identification (Entity Deduplication)}
+\label{sec:person-id}
+This represents the main task brought forward by the WePS \cite{weps2-eval} competition.
+It consists of generating the relevant clusters of pages, with each cluster corresponding
+to a single entity. There are a number of possible metrics available to judge the accuracy
+of the classification. Some metrics provide a better gauge for correctness and utility of
+the classification than others. Such metrics include:
+
+\begin{itemize}
+    \item
+      Purity and Inverse Purity metrics. 
+      A high purity score implies that a cluster has documents referring to one
+      particular individual, while a high inverse purity metric implies that as
+      many persons as possible are assigned to clusters.
+    \item
+      BCubed Precision and Recall metrics
+      The percentage of documents referring to a single person within a cluser
+      represents precision, while the recall metric refers to the number of people assigned
+      to the correct cluster.
+\end{itemize}
+
+As was shown in the evaluation of the competition \cite{weps2-eval}, the first
+metric is prone to errors. It is possible to obtain high scores for both metrics.
+By adding each document to its own cluster as well as creating a cluster that contains
+all documents duplicated, we achieve a perfect inverse purity score, as each
+person is assigned to a cluster. The single "big" cluster has a low purity score, however the
+other single clusters provide a skewing factory with a high purity score. The
+classification is meaningless, but yet it provides greater than average scores.
+
+The second metric is more reliable as it is very difficult to obtain both a high
+precision and recall rate at the same time. During the challenge, teams either swayed
+towards a higher precision with less recall, or vice versa. This problem is
+also apparent in our proposed solution, given a limited feature set. However,
+we are able to improve our precision score while maintaining adequate recall
+rates with the addition of discriminant features.
+
+\section{Best WePS-3 Result}
+\label{sub-sub-sec:best-weps-result}
+The best approach \cite{weps-best} for the final WePS-3 competition provides a
+balanced result of around 60\% \cite{weps3-eval} precision and recall. The results
+are, however, skewed by the test set size as well as the training set size. Due
+to the size of the dataset, it is impossible to train a classifier that works for
+a general use case and thus its performance often gets tuned on the dataset's domain,
+more so than the whole problem.
+
+The best approach makes use of a number of techniques to produce the final
+clusterization. A few of these techniques are:
+\begin {itemize}
+    \item
+        Feature extraction from the documents using the following models:
+    \begin {itemize}
+        \item {Wikipedia Concepts as the basis for feature detection and extraction.
+               In short, it matches phrases to wikipedia article titles.}
+        \item {Bag-of-words approach, similar to many conventional approaches.}
+        \item {Named Entity Recognition that splits words into various categories
+               related to entities.}
+   \end{itemize}
+   \item
+       Merge all the features discovered in a document into an associated feature-vector.
+   \item
+       Attach a weight to each feature, according to a feature weighting model.
+       {\em This approach is what clearly separates the submission from the rest.\/}
+
+   \item
+       Compute similarity between documents using cosine similarity and overlap similarity.
+\end{itemize}
+The most important aspect of the classification idea is bound to the feature
+weighting model, that is comprised of two separate models. One is related to the
+feature relevance to the search query and is based on the proximity of the feature
+to the sentence that matches the query. The second model is related to the content
+relevance of the feature. 
+
+The content relevance of the feature is important due to the following reasons:
+If the query name is the main topic of the page (say, the home page of a person),
+all or most of the features are related to that query. In that case, their relevance
+to the page content is similar to their relevance to the query name. 
+If the query name is not the main topic of the content, for example, a query name
+“David Beckham” mentioned in some news article talking about soccer games, though
+the query names like “David Beckham” are not the main topic of the articles, they
+tend to refer to the same person in the text with words like “soccer”, and “game” etc.
+In order to compute content relevance, a machine learning model is used. The machine
+learning model uses both content, as well as some page structural features:
+\begin {enumerate}
+\item Structural characteristics of the feature: presence in the title, in the meta keywords,
+table headers, table body, lists, etc;
+\item Visual characteristics such as font size, frequency in the visual title, bolding, italics.
+\item General characteristics such as the feature category, its domain, language, length.
+\item Non-structural characteristics, including TFIDF score.
+\item Corpus level characteristics, including document frequency, dominant category etc.
+\end {enumerate}
+
+Clusterization is performed based on the feature vectors, using the similarity of the
+documents, as described above. The clusterization algorithm is Hierarchical Agglomerative
+Clustering. Final performance is improved when using both weighting models combined,
+as opposed to a single one.
+
+\section{Exploiting web querying for web people search}
+A pairwise approach for solving the WePS 2 challenge is proposed by \cite{nuray2009exploiting}.
+The authors propose a 2 step process. One is to first compute the probability
+that two pages are refering to the same person. The second step is to perform
+a clusterization by joining pairs that feature a sufficiently high probability
+of representing the same person.
+
+The probability function is computed by joining multiple features. Some of the more
+relevant features are:
+\begin {itemize}
+\item
+   {\em Named-Entity-Based similarity \/}. Named entities include person, organization and location names,
+   extracted with a named entity recognizer. After the named entities are extracted,
+   the similarity is computed by making use of a standard TF/IDF weighting scheme.
+\item
+   {\em Middle Name Initial Dissimilarity \/}. The existance of a difference between
+   middle name initials is evidence that the similar names are not refering to the same
+   individual.
+\item
+   {\em Hyperlinks-Based Similarity \/}. Any links between very similar domain names,
+   such as those that feature the same nickname (ex: {\em plus.google.com/john.dowe \/}
+   and {\em facebook.com/john.dowe \/}
+\end {itemize}
+
+Similar features are in use by our approach as they provide a highly discriminatory
+feature set.
+
+
+\section{Web People Search using Connection Analysis}
+A different approach to tackling the Web People Search problem is proposed by
+\cite{connection-analysis}. Their approach bares resemblance to the approach
+we propose. The main idea is to construct a linkage graph of various web pages.
+For each link there exists a function which computes a confidence associated with
+it. Given the confidences associated with the link, as well as all the neighboring
+nodes, a cluster is established.
+
+The clustering algorithm used is a Correlation Clustering (CC) approach.
+\cite{correlation-clustering} The problem is known to be NP-Hard so the authors
+have not focused on providing a better performing CC algorithm. However, they
+focused on training the confidence function.
+\[ f(u, v) =
+    \left\{
+        \begin{array}{ll}
+            1 \mbox{ if } chance(u, v) \geq 0.5 \\
+            0 \mbox{ otherwise}
+        \end{array}
+    \right.
+\]
+\[ chance(u, v) = probability(u,v) \mbox{ refer to the same person } \]
+
+The difficulty lies in computing $ probability(u,v) $. Given that the training
+data only gives truth values, the main factor in the computation of the
+probability value is the TF/IDF metric. This approach provides an interesting
+result once the clusterization is taken into account. The approach improves
+on the WePS submissions by improving precision and recall by about 10\% percent
+\cite{connection-analysis}.
+

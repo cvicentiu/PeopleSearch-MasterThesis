@@ -1,0 +1,18 @@
+\chapter{Conclusions}
+\label{chapter:conclusions}
+
+Clustering named  based entities is a difficult task, as all the WEPS competitions show.
+Nonetheless, our approach manages to compare similarly in regards to the recall score.
+Precision is better than the best WEPS submission, however it is difficult to quantify
+if the result represents a direct improvement as the datasets are different.
+Looking at the practical aspect of the classifier, we are able to correctly
+identify 60\% of positively matched pairs with close to 90\% accuracy.
+
+Compared to our previous unsupervised approach, the supervised approach performs
+better, improves running time and increases test dataset maximum size due to the
+linear complexity of the classification step.
+
+For future development, we plan to extend the number of features to not only
+text based derivatives. A very difficult to use but potentially very useful feature
+is the similarity between pictures available in the documents. This however requires
+a completely different approach and probably a dataset that is a lot larger.
