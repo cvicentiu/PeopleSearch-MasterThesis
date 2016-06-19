@@ -37,10 +37,28 @@ Before going into the details of how we generate the final clustering, we shall
 explain how the dataset is structured, as well as the advantages it presents
 over the WEPS dataset.
 
+\section{Problems with the WEPS dataset}
+\label{section:weps-dataset-problems}
+There are a number of issues stemming from the WEPS dataset, that makes the
+challenge even more difficult. The first problem is that the data is noisy,
+which leads to high variance when comparing different approaches. Although a
+model for deduplicating entities might perform excellent with good data, its
+results are shadowed by the noisy and often incomplete data in the WEPS dataset.
+Even if the goal of the competition is to provide a challenging and real world
+environment, it does not allow applications to take advantage of how information
+is structured on the internet today, within various social networks.
+
+By definition, social networks feature pages (mostly) related to people or
+named entities. The information present within those pages is structured in a
+predictable manner and also has paragraphs which are clearly tagged as describing
+a certain aspect related to a person. This effectively leads to an already tagged
+dataset. The information is also less filled with malformed HTML related tagging,
+as social networks do not allow users to insert their own HTML tags within information
+paragraphs (usually).
 
 \section{Dataset Used}
 \label{section:dataset-used}
-Due to these noisy nature of the WEPS dataset, the approach discussed within
+Due to the noisy nature of the WEPS dataset, the approach discussed within
 this paper does not make use of the provided dataset from the competition as
 evaluation, instead it makes use of a web crawled version from various social
 networks.
@@ -54,27 +72,113 @@ jobs, etc.
 
 The dataset also features a gold standard which describes which sets of pages
 refer to the same individual. The average number of pages per individual is
-around 2.04. The format of the dataset is a json style string list. A recursive
-approach is required to fetch all relevant content.
+2.04, with the distribution showed in \labelindexref{Figure}{img:dataset-histogram}.
+The format of the dataset is a json style string list. A recursive approach is
+required to fetch all relevant content.
+\fig[scale=0.4]{src/img/dataset-histogram.png}{img:dataset-histogram}{Dataset Cluster Size Distribution}
 
-The diagram below shows a sample entry from the dataset:
+\labelindexref{Listing}{lst:dataset-entry} shows a sample entry from the dataset.
+Each entry defines the attributes \_source, \_sourceId, \_timestamp and \_url.
+These attributes uniquely identify an entry within the dataset. Other entries
+sometimes contain additional tags and information such as an "about" tag, which
+provides a more elaborate description of the individual's page.
+\lstset{language=java,caption=Dataset Entry,label=lst:dataset-entry}
+\begin{lstlisting}
+{
+   "_source":"facebook",
+   "_sourceId":"100002922726953",
+   "_timestamp":"2015-01-08T13:40:16.436Z",
+   "_url":"https://www.facebook.com/wayist",
+   "username":"wayist",
+   "name":"Jean Du Plessis",
+   "firstName":"Jean",
+   "lastName":"Du Plessis",
+   "extra":{  
+      "raw":{  
+         "id":"100002922726953",
+         "first_name":"Jean",
+         "gender":"male",
+         "last_name":"Du Plessis",
+         "link":"https://www.facebook.com/wayist",
+         "locale":"en_US",
+         "name":"Jean Du Plessis",
+         "username":"wayist"
+      },
+      "gender":"male",
+      "id":"100002922726953"
+   }
+}
+\end{lstlisting}
 
+The dataset contains entries not only in the English language. Due to how
+our algorithm parses entries, we end up discarding entities that have no word
+in the profile page in English.
 
-\section{Generating Feature Vectors for Classification}
+\section{Generating Feature Vectors for Documents}
 \label{section:generating-features}
+In order to train a classifier, or perform clustering on entries within the
+dataset, we must convert the textual representation of the data into a continuous
+n-dimensional vector. The vector is then passed to the classification algorithm
+as a normalized entry.
+
+\subsection{Domain Specific Features}
+\label{sub-sec:domain-specific-features}
+Generating the feature vector is done by extracting relevant information from
+the entries. There are a number of strong features which are domain specific.
+The most relevant ones which we make use of are:
+\begin{enumerate}
+  \item \textbf{First and Last Name}; These essentially represent the first discriminative
+    feature in our dataset. Almost all of the dataset's entries feature these
+    tags. Although not impossible, it is highly unlikely that two profiles
+    belong to the same person if the first or last name tags differ. A different
+    middle name also represents a strong signal towards a negative match.
+  \item \textbf{Gender}; Gender is a very important signal in classification.
+    Although data might be flawed for a few entries, in general, gender will
+    need to match for two entries to belong to the same person.
+  \item \textbf{Country}; A matching country is important to restrict the
+    search domain for individuals.
+\end{enumerate}
+
+Aside from these features, we need to make use of extra information present
+within the profiles. This information is presented as part of an extra label,
+such as "about". Within this label we might find relevant interests of a person,
+publications, events, places related, etc. This information is important in
+accurately pinpointing individuals which match. In order to create a significant
+set of features regarding this label we have made use of word embeddings, generated
+through Word2Vec.
+
+\todo{
 In a previous iteration for this problem, we have attempted an unsupervised approach
 that made use of Hierarchical Agglomerative Clustering between word embeddings.
 This approach has shown that word embeddings represent a statistically relevant
 feature when it comes to clustering entities. The downside of the HAC approach is the
 performance degradation as the dataset increases. The supervised approach trains a
 classifier on a much larger corpus and thus can better learn the separating function.
+}
 
 \subsection{Word embeddings - Word2Vec}
 \label{sub-sec:word-embeddings}
 Word embeddings represent a mapping between words in a language and a n-dimensional
 space. In order to generate these embeddings, we have made use of Google's word2vec
-approach \cite{mikolov2013distributed}. The model used is a pretrained one on
-Google News and has 300 features per vector.
+approach \cite{mikolov2013distributed}. Word2Vec is a tool that learns from a large
+text corpus, relations between different words. It first constructs a vocabulary
+of available words and then it learns a representation for the vocabulary.
+The words from the corpus are placed into a continuous N dimensional space
+(ex. 300 dimensions). The resulting vectors can be used in a wide array of
+natural language processing and machine learning applications.
+
+The architecture behind Word2Vec is a shallow neural network.
+The reason why it is a shallow neural network is that it’s authors have
+shown that sacrificing the complexity of the model, in return for the ability
+to learn from a much larger corpus (in the same amount of time) leads to
+better results overall. The model provides an efficient implementation of
+both a bag-of-words architecture as well as a skip-gram one. The advantage of
+word2vec is that it can be trained without any labeled data. The relations
+between words are extracted directly from the training corpus. The outputted
+vectors have a property that the cosine distance between words is small when
+words are related (such as ‘king’ and ‘queen’) and gets bigger as words are
+less related (such as ‘ship’ and ‘dog’). The model used in our implementation
+is a pretrained one on Google News and has 300 features per vector.
 
 In order to generate a single embedding that represents a document from our dataset,
 we have computed separate embeddings for each word in the document (excluding any
@@ -85,11 +189,14 @@ both documents.
 
 To generate a feature vector for a pair case we concatenate both embeddings. A
 thing to note is that the features are not symetric and thus the resulting vector
-for pair $ (a, b) $ is different fromt he resulting vector for pair $ (b, a) $.
+for pair $ (a, b) $ is different from the resulting vector for pair $ (b, a) $.
 To counteract this problem we generate both pairs and feed them both to the classifier.
 
 \subsection{Distance based features}
 \label{sub-sec:distance-based-features}
+
+The supervised approach makes use of features specific for a pair of documents.
+These features are not passed to the unsupervised approach.
 
 Apart from word embeddings, the pairwise feature vector contains aggregate based
 features. These features are symetric, so only one feature is added to the feature
