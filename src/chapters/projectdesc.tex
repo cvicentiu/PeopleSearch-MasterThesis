@@ -25,20 +25,36 @@ the classification than others. Such metrics include:
 
 \begin{itemize}
     \item
-      Purity and Inverse Purity metrics. 
+      Purity and Inverse Purity metrics.
       A high purity score implies that a cluster has documents referring to one
       particular individual, while a high inverse purity metric implies that as
       many persons as possible are assigned to clusters.
     \item
-      BCubed Precision and Recall metrics
+      BCubed Precision and Recall metrics. \cite{amigo2009comparison}
       The percentage of documents referring to a single person within a cluser
       represents precision, while the recall metric refers to the number of people assigned
-      to the correct cluster.
+      to the correct cluster. Precision and Recall are defined as:
+\[
+   Correctness(e, e') = 
+      \left\{
+         \begin{array}{ll}
+            1 \mbox { <=> } L(e) = L(e') \mbox { and } C(e) = C(e') \\
+            0 \mbox{ otherwise }
+         \end{array}
+      \right.
+\]
+\[
+   Precision_{BCubed} = Avg_e[Avg_{e'.C(e) = C(e')}[Correctness(e, e')]]
+\]
+\[
+      Recall_{BCubed} = Avg_e[Avg_{e'.L(e) = L(e')}[Correctness(e, e')]]
+\]
+      Our approach is evaluated using the BCubed metrics, as well as regular
+      precision and recall for the binary classifier.
 \end{itemize}
-
 As was shown in the evaluation of the competition \cite{weps2-eval}, the first
 metric is prone to errors. It is possible to obtain high scores for both metrics.
-By adding each document to its own cluster as well as creating a cluster that contains
+By adding each document to its own cluster, as well as creating a cluster that contains
 all documents duplicated, we achieve a perfect inverse purity score, as each
 person is assigned to a cluster. The single "big" cluster has a low purity score, however the
 other single clusters provide a skewing factory with a high purity score. The
@@ -167,4 +183,3 @@ probability value is the TF/IDF metric. This approach provides an interesting
 result once the clusterization is taken into account. The approach improves
 on the WePS submissions by improving precision and recall by about 10\% percent
 \cite{connection-analysis}.
-

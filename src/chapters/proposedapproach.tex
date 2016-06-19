@@ -6,6 +6,7 @@ each. The methods employed are based on ideas presented from the WEPS competitio
 but adapted to our dataset. One approach tries to solve the problem in an unsupervised
 manner, while the other aims to train a classifier using a supervised
 approach. All methods make use of the same features extracted from the dataset.
+
 For the unsupervised approach we generate feature vectors that identify each
 profile. With the feature vectors we perform Hierarchical Agglomerative Clustering,
 using a cosine distance as the merging factor. We vary the number of desired
@@ -75,13 +76,13 @@ refer to the same individual. The average number of pages per individual is
 2.04, with the distribution showed in \labelindexref{Figure}{img:dataset-histogram}.
 The format of the dataset is a json style string list. A recursive approach is
 required to fetch all relevant content.
-\fig[scale=0.4]{src/img/dataset-histogram.png}{img:dataset-histogram}{Dataset Cluster Size Distribution}
 
 \labelindexref{Listing}{lst:dataset-entry} shows a sample entry from the dataset.
 Each entry defines the attributes \_source, \_sourceId, \_timestamp and \_url.
 These attributes uniquely identify an entry within the dataset. Other entries
 sometimes contain additional tags and information such as an "about" tag, which
 provides a more elaborate description of the individual's page.
+
 \lstset{language=java,caption=Dataset Entry,label=lst:dataset-entry}
 \begin{lstlisting}
 {
@@ -113,6 +114,8 @@ provides a more elaborate description of the individual's page.
 The dataset contains entries not only in the English language. Due to how
 our algorithm parses entries, we end up discarding entities that have no word
 in the profile page in English.
+\fig[scale=0.4]{src/img/dataset-histogram.png}{img:dataset-histogram}
+               {Dataset Cluster Size Distribution}
 
 \section{Generating Feature Vectors for Documents}
 \label{section:generating-features}
@@ -139,6 +142,11 @@ The most relevant ones which we make use of are:
     search domain for individuals.
 \end{enumerate}
 
+Domain specific features are mapped to a continuous space through a word
+embedding or in the case of gender by a discrete value of either 0 or 1. No
+intermediate gender values are permitted although that could account for future
+development.
+
 Aside from these features, we need to make use of extra information present
 within the profiles. This information is presented as part of an extra label,
 such as "about". Within this label we might find relevant interests of a person,
@@ -147,18 +155,9 @@ accurately pinpointing individuals which match. In order to create a significant
 set of features regarding this label we have made use of word embeddings, generated
 through Word2Vec.
 
-\todo{
-In a previous iteration for this problem, we have attempted an unsupervised approach
-that made use of Hierarchical Agglomerative Clustering between word embeddings.
-This approach has shown that word embeddings represent a statistically relevant
-feature when it comes to clustering entities. The downside of the HAC approach is the
-performance degradation as the dataset increases. The supervised approach trains a
-classifier on a much larger corpus and thus can better learn the separating function.
-}
-
 \subsection{Word embeddings - Word2Vec}
 \label{sub-sec:word-embeddings}
-Word embeddings represent a mapping between words in a language and a n-dimensional
+Word embeddings represent a mapping between words in a language and an n-dimensional
 space. In order to generate these embeddings, we have made use of Google's word2vec
 approach \cite{mikolov2013distributed}. Word2Vec is a tool that learns from a large
 text corpus, relations between different words. It first constructs a vocabulary
@@ -186,11 +185,19 @@ words which are not found in the word2vec's model dictionary). We then sum up
 the embeddings column by column and average out the result. The resulting vector
 is the representative embedding for our document. This process is repeated for
 both documents.
+\[
+  embedding(entry) = \frac{\sum_{word}^{words} word2vec(word)}{|words|}
+\]
 
-To generate a feature vector for a pair case we concatenate both embeddings. A
+For the pairwise classifier, we need to generate pairwise embeddings. To generate
+a feature vector for a pair case we concatenate both embeddings. A
 thing to note is that the features are not symetric and thus the resulting vector
 for pair $ (a, b) $ is different from the resulting vector for pair $ (b, a) $.
 To counteract this problem we generate both pairs and feed them both to the classifier.
+
+\[
+  pair\_embedding(a, b) = concat(embedding(a), embedding(b)
+\]
 
 \subsection{Distance based features}
 \label{sub-sec:distance-based-features}
@@ -209,17 +216,18 @@ vector for each pair. These features are:
       compute the edit distance for the names present in both documents. Although
       segregating documents first by grouping them by name is a valid alternative,
       this approach allows us to consider documents that do not have the name
-      tag featured directly, or if the names differ. This can happen if the user
-      choses to use a nickname for one social network, while using his real name
-      for a second one.
+      tag featured directly, or if the names differ.
+      This can happen if the user choses to use a nickname for one social network,
+      while using his real name for a second one, or even due to a typo. The
+      levenshtein distance adds robustness to any noise.
     \item
-      {\em Cosine Based Similarity and Euclidean Distance. } Although these features
+      { \em Cosine Based Similarity and Euclidean Distance. } Although these features
       are computed directly based on document embedding, it does
       improve the classifiers performance. The addition to recall
       is around a 2\% increase. Cosine similarity is defined by:
       \[ similarity = cos(\theta) = \frac{A \cdot B}{||A|| ||B||} \]
       Euclidean distance is defined by:
-      \[ d(p, q) = d(q, p) = \sqrt{\sum_{i=1}^{card(p)}(q_i - p_i)^2} \]
+      \[ d(p, q) = d(q, p) = \sqrt{\sum_{i=1}^{length(p)}(q_i - p_i)^2} \]
 \end{itemize}
 
 \subsection{Augmenting / Cleaning up the dataset}
@@ -243,14 +251,82 @@ transformation. The data's dimensionality is reduced to 25 features and then ret
 to the original size via the inverse transformation. This has provided an
 improvement of 2\% to the recall metric.
 
+\labelindexref{Figure}{img:scatter} Shows different distributions for positive class pairs
+as oposed to negative class pairs. However, both distributions share the same mean
+and only vary on amount of deviation from the mean. This overlap causes
+difficulties when classifying them above a certain threshold of simillarity. By
+increasing the threshold we increase recall but greatly reduce precision.
 
+\fig[scale=0.4]{src/img/scatter01.png}{img:scatter}{Distribution of positive (red) vs negative (green) class,
+  after performing the direct PCA transformation, using the main 2 discriminative dimensions. }
 \section {Architecture}
 \label{section:architecture}
 
-Our approach is structured as a pipeline process. There are multiple stages, each
-applying one transformation to the data. The architecture is described in
-\labelindexref{Figure}{img:architecture}.
+Since we have attempted two distinct approaches for solving the problem, we have
+implemented two slightly different architectures. Thanks to the modularity of
+both of them, there is quite a bit of overlap between the two. We will start
+with the least performing one, the unsupervised approach, and continue
+with the supervised one.
+
+\subsection {Unsupervised clustering}
+\label{sub-sec:unsupervised-clustering}
+
+Our first approach aims to create a general solution, that expands to more than
+just this specific dataset. This was the motivation behind attempting an unsupervised
+approach. We structured the computation as a pipeline process. There are multiple
+stages each applying one transformation to the data. The architecture is described in
+\labelindexref{Figure}{img:hac-architecture}.
 The main stages are the following:
+\fig[scale=0.35]{src/img/hac-arch.png}{img:hac-architecture}
+                {Unsupervised Approach, Data Processing Pipeline}
+\begin{enumerate}
+\item {\em Labels and text extraction}, reads all the files which are stored in
+a JSON format. Going through each dictionary item, the labels and their values
+are extracted. A few labels define the key used in the golden standard.
+These are treated separately so that the classification results can be compared.
+\item {\em Normalize input }, removes any formatting inconsistencies such as
+extra whitespaces and oddly capitalized words. This is to improve the performance
+of the word embedding produced by word2vec.
+\item {\em Apply word2vec }, creates a word embedding for each word present
+within an entry representing a social network page. The word embeddings have
+300 dimensions and are normalized. Also append all the domain specific features
+which are described in \labelindexref{Subsection}{sub-sec:domain-specific-features}.
+\item {\em Create centroids for each entry}, aims to map each entry to a certain
+region of space. The region of space should be representative of that person.
+Pages referring to the same individual should be placed closer together.
+This is performed by summing the resulting word embeddings and
+averaging across all dimensions.
+\item {Generate pairwise cosine distances}, takes each centroid pair and
+computes the cosine distance between them. Before generating the pairwise distance
+we perform PCA on the feature vectors, reducing their dimensionality to 25 dimensions,
+then returning to the original number of dimensions. This is performed in order
+to reduce the noise between cluster entities.
+\item {Hierarchical Agglomerative Clustering} is performed based on the pairwise
+distances generated in the previous step. The threshold for where the clustering
+stops is determined based on the scoring metrics.
+\item {Scoring} is performed given a certain clusterization output, and the
+gold standard contained within the dataset’s truth table.
+The metrics used to score the result are bcubed precision and recall, described
+in \labelindexref{Section}{sec:person-id}
+\end{enumerate}
+
+\subsection {Supervised clustering}
+
+The previous unsupervised approach, that made use of Hierarchical Agglomerative
+Clustering between word embeddings. That approach has shown that word embeddings
+represent a statistically relevant feature when it comes to clustering entities.
+The downside of the HAC approach is the performance degradation as the dataset
+increases. The supervised approach trains a classifier on a much larger corpus
+and thus can better learn the separating function.
+We have implemented a general purpose architecture for the supervised approach.
+We aim to generate all the relevant pairs of documents, given the gold standard
+available for the dataset. The test set represents a subset of the full gold
+standard, with completely different entities and clusters. The architecture
+is presented in \labelindexref{Figure}{img:architecture} and has the following
+stages:
+
+\fig[scale=0.35]{src/img/architecture.png}{img:architecture}{Data Processing Pipeline}
+
 \begin {enumerate}
 \item
   {\em Compute word2vec embedding for document}. In this stage, each word in the
@@ -267,15 +343,99 @@ The main stages are the following:
   and negative classes.
 \item
   {\em Training the classifier}. Training is performed on a slightly less
-  imbalanced dataset, with only 4 to 1 imbalance between positive and negative
+  imbalanced dataset, with only 10 to 1 imbalance between positive and negative
   classes. However, the classifier has class weights attached in favor
   of the positive class. Cross validation is performed using a 5 times fold.
+\item
+  {\em Graph reconstruction}. Reconstruction is performed by computing the
+  set of connected components given all the different entities present in the
+  dataset, as well as the binary pairs which are marked as belonging to the same
+  entity by the classifier.
+\item
+  {\em Scoring}. Scoring is done in a similar fashion as the unsupervised approach,
+  by computing bcubed precision and recall for the outputed clustering agains the
+  gold standard one.
 \end {enumerate}
 
-\fig[scale=0.5]{src/img/architecture.png}{img:architecture}{Data Processing Pipeline}
+\subsubsection {Random Forest Classifier}
+Our first attempt at training a classifier was to make use of the toolkit available
+in the scikit-learn framework. This gave us a good baseline. Even without much
+tuning, the Random Forest Classifier provides better results than the unsupervised
+approach. The advantages over the unsupervised approach is the large number of
+entries that the classifier can train on. While the HAC approch needs to be performed
+on subsets of the entire corpus, in this case we can train on 90\% of the data
+and test on the remaining 10\%.
 
-\section{Testing}
-\label{section:testing}
+The main reason for chosing the Random Forest Classifier\cite{horning2010random}
+is its ease of use, with a simple way of determining parameters. In addition,
+it is highly unlikely that it
+will overfit on the training data. It is also quite quick, compared to other
+alternatives. The Random Forest Classifier has some limitations however, as it
+tends to overestimate the high values and underestimate the low ones. Althout
+it can detect and learn nonlinearities within the training set, it's complexity is
+limited by the depth of the trees, which for this large dataset had to be reduced
+to a fixed size of 12.
+
+\subsubsection {Neural Net Classifier}
+Given the good results produced by the RF classifier, we have decided to experiment
+with a more complicated model. The reasoning behind it is that we need a model
+to match all the potential dependancies between each feature as well as learn
+any non-linearities present. To do this, we have created a deep neural network
+that takes all the input parameters and outputs probabilities that the pair
+of entries belong to the same entity or not. The architecture of the neural net
+is described in \labelindexref{Figure}{img:nn-arch}
+
+\fig[scale=0.4]{src/img/NN-arch.png}{img:nn-arch}{Architecture of the neural net. The final
+layer performs softmax to output probabilities. The first 4 layers produce a denser
+representation of the input while the other 2 aim at learning the discrimative
+features between the positive and negative classes.
+}
+
+The reasoning for the architecture of the NN is the following:
+\begin{enumerate}
+\item
+  The first layer has a larger dimension than the input, allowing for a better
+  representation, mostly in regards to the domain specific features.
+\item
+  The next two layers reduce the dimensionality of the representation so that
+  we end up with a denser feature space.
+\item
+  The final layers make use of RELU activation units. According to Nair, Vinod
+  and Hinton, Geoffrey E. \cite{nair2010rectified} RELU units have good results
+  when performing binary pairwise classification.
+  To avoid overfitting, we have made use of the dropout technique \cite{srivastava2014dropout}.
+\item
+  To output the final result, we have a 2 neuron layer that performs softmax.
+  The neurons gives us the estimated probabilities for the pair to belong to
+  a certain class. The classes use a 1 of k (where $ k = 2 $) encoding.
+  The final class is given by performing $ argmax(output) $.
+\end{enumerate}
+The loss function is defined as the cross entropy function, with the added weight
+that false positives contribute 10 times more to the loss sum than other
+missclassifications.
+\[
+  L(y) = -\frac{1}{N}\sum_{n=1}^N[y_n * \log y'_n + (1 - y_n)\log (1 - y'_n)] * W(y_n, y'_n)
+\]
+where
+\[ W(y, y') =
+    \left\{
+        \begin{array}{ll}
+            10 \mbox{ if y is positive and y' is negative } \\
+            1 \mbox{ otherwise }
+        \end{array}
+    \right.
+\]
+
+The reason for assigning a stronger weight to false positive errors is that we
+do not want to create false connection between entities. Missing some edges
+within a complete clique will not affect the final connected components result.
+Thus, we aim to maintain a high precision metric, by increasing recall as much as
+possible for the classification phase.
+
+\subsubsection {Recreating the connections graph}
+
+\chapter{Experiments}
+\label{chapter:testing}
 
 Testing our approach is done using a unbalanced generated test set. We compare
 our precision and recall scores to that of Weps best solution. The comparison
